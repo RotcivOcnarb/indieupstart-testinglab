@@ -1,0 +1,25 @@
+{
+  "name": "indie-feedback-backend",
+  "version": "1.0.0",
+  "description": "Backend AWS Serverless para a plataforma Indie Feedback",
+  "main": "src/auth/index.mjs",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "sam build",
+    "deploy:dev": "sam build && sam deploy --config-env dev",
+    "deploy:dev:guided": "sam build && sam deploy --guided --config-env dev",
+    "deploy:prod": "sam build && sam deploy --config-env prod",
+    "deploy:prod:guided": "sam build && sam deploy --guided --config-env prod",
+    "logs:dev": "sam logs --stack-name indie-feedback-backend-dev --tail",
+    "logs:prod": "sam logs --stack-name indie-feedback-backend-prod --tail",
+    "delete:dev": "sam delete --config-env dev",
+    "delete:prod": "sam delete --config-env prod"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.500.0",
+    "@aws-sdk/client-s3": "^3.500.0",
+    "@aws-sdk/lib-dynamodb": "^3.500.0",
+    "@aws-sdk/s3-request-presigner": "^3.500.0"
+  }
+}

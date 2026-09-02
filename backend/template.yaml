@@ -1,0 +1,325 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Indie Feedback - AWS Serverless Architecture for Playtest Platform
+  Includes DynamoDB Tables, S3 Buckets, CloudFront, API Gateway HTTP API, and Lambda Functions.
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment stage (dev or prod)
+
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 256
+    Runtime: nodejs20.x
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        STAGE: !Ref Stage
+        USERS_TABLE: !Ref UsersTable
+        GAMES_TABLE: !Ref GamesTable
+        REVIEWS_TABLE: !Ref ReviewsTable
+        BANNERS_BUCKET: !Ref BannersBucket
+        DISCORD_CLIENT_ID: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:CLIENT_ID}}"
+        DISCORD_CLIENT_SECRET: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:CLIENT_SECRET}}"
+        DISCORD_BOT_TOKEN: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:BOT_TOKEN}}"
+        DISCORD_GUILD_ID: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:GUILD_ID}}"
+        DISCORD_FORUM_CHANNEL_ID: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:FORUM_CHANNEL_ID}}"
+        DISCORD_MOD_WEBHOOK_URL: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:MOD_WEBHOOK_URL}}"
+
+Resources:
+  # =========================================================================
+  # DynamoDB Tables
+  # =========================================================================
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "IndieFeedback-Users-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  GamesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "IndieFeedback-Games-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: threadId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: threadId
+          KeyType: HASH
+
+  ReviewsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "IndieFeedback-Reviews-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: threadId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: threadId
+          KeyType: HASH
+        - AttributeName: userId
+          KeyType: RANGE
+
+  # =========================================================================
+  # S3 Buckets
+  # =========================================================================
+  BannersBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "indie-feedback-banners-${Stage}-${AWS::AccountId}-${AWS::Region}"
+
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [GET, PUT, POST, HEAD]
+            AllowedOrigins: ["*"]
+            MaxAge: 3000
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  BannersBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BannersBucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${BannersBucket.Arn}/*"
+
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "indie-feedback-frontend-${Stage}-${AWS::AccountId}-${AWS::Region}"
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${FrontendBucket.Arn}/*"
+
+  # =========================================================================
+  # CloudFront CDN
+  # =========================================================================
+  FrontendCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3FrontendOrigin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: http-only
+        DefaultCacheBehavior:
+          TargetOriginId: S3FrontendOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+
+  # =========================================================================
+  # API Gateway (HTTP API v2)
+  # =========================================================================
+  HttpApiGateway:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: IndieFeedbackApi
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Amz-Date
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+
+  # =========================================================================
+  # Lambda Functions
+  # =========================================================================
+  AuthDiscordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/auth/
+      Handler: index.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /auth/discord
+            Method: POST
+            ApiId: !Ref HttpApiGateway
+
+  GetUserProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/user/
+      Handler: index.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /user/profile
+            Method: GET
+            ApiId: !Ref HttpApiGateway
+
+  GetGamesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/games/
+      Handler: list.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref GamesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ReviewsTable
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /games
+            Method: GET
+            ApiId: !Ref HttpApiGateway
+
+  UploadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/games/
+      Handler: upload-url.handler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref BannersBucket
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /games/upload-url
+            Method: POST
+            ApiId: !Ref HttpApiGateway
+
+  CreateGameFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/games/
+      Handler: create.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GamesTable
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /games
+            Method: POST
+            ApiId: !Ref HttpApiGateway
+
+  CreateReviewFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/reviews/
+      Handler: create.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ReviewsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref GamesTable
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /reviews
+            Method: POST
+            ApiId: !Ref HttpApiGateway
+
+  ReportReviewFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/reports/
+      Handler: review.handler
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /reports/review
+            Method: POST
+            ApiId: !Ref HttpApiGateway
+
+  ReportGameFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/reports/
+      Handler: game.handler
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /reports/game
+            Method: POST
+            ApiId: !Ref HttpApiGateway
+
+Outputs:
+  ApiEndpoint:
+    Description: HTTP API Gateway Endpoint URL
+    Value: !Sub "https://${HttpApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
+  CloudFrontUrl:
+    Description: CloudFront Distribution URL for Frontend
+    Value: !Sub "https://${FrontendCloudFrontDistribution.DomainName}"
+  BannersBucketName:
+    Description: S3 Bucket for Uploading Banners
+    Value: !Ref BannersBucket

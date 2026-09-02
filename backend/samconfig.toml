@@ -1,0 +1,41 @@
+# SAM Configuration File for Indie Feedback Backend Multi-Stage Deployments
+
+version = 0.1
+
+[default]
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+resolve_s3 = true
+
+# =========================================================================
+# DEV STAGE CONFIGURATION
+# Usage: sam build && sam deploy --config-env dev
+# =========================================================================
+[dev]
+[dev.deploy.parameters]
+stack_name = "indie-feedback-backend-dev"
+s3_prefix = "indie-feedback-backend-dev"
+region = "us-east-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = 'Stage="dev"'
+resolve_s3 = true
+
+# =========================================================================
+# PROD STAGE CONFIGURATION
+# Usage: sam build && sam deploy --config-env prod
+# =========================================================================
+[prod]
+[prod.deploy.parameters]
+stack_name = "indie-feedback-backend-prod"
+s3_prefix = "indie-feedback-backend-prod"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = 'Stage="prod"'
+resolve_s3 = true
