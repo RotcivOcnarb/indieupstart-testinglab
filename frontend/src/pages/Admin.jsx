@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { ShieldAlert, Coins, Trash2, Send } from 'lucide-react';
+import { ShieldAlert, Coins, Trash2, Send, CalendarDays, Plus, Pencil, Clock, CheckCircle2, X } from 'lucide-react';
 
 const Admin = () => {
   const { user } = useAuth();
@@ -25,6 +25,14 @@ const Admin = () => {
   const [announcementContent, setAnnouncementContent] = useState('');
   const [mentionEveryone, setMentionEveryone] = useState(false);
 
+  // Gincanas State
+  const [gincanas, setGincanas] = useState([]);
+  const [gincanasLoading, setGincanasLoading] = useState(false);
+  const [showGincanasModal, setShowGincanasModal] = useState(false); // 'create' | 'edit' | false
+  const [editingGincana, setEditingGincana] = useState(null);
+  const [gincanasForm, setGincanasForm] = useState({ message: '', scheduledDate: '' });
+  const [gincanasSubmitting, setGincanasSubmitting] = useState(false);
+
   useEffect(() => {
     if (user && user.role !== 'admin') {
       navigate('/');
@@ -32,9 +40,8 @@ const Admin = () => {
   }, [user, navigate]);
 
   useEffect(() => {
-    if (activeTab === 'games') {
-      loadGames();
-    }
+    if (activeTab === 'games') loadGames();
+    if (activeTab === 'gincanas') loadGincanas();
   }, [activeTab]);
 
   const loadGames = async () => {
@@ -94,6 +101,73 @@ const Admin = () => {
     }
   };
 
+  // ── Gincanas handlers ──────────────────────────────────────────────────────
+  const loadGincanas = async () => {
+    setGincanasLoading(true);
+    try {
+      const data = await api.adminGetGincanas(user.userId);
+      setGincanas(data.gincanas || []);
+    } catch (err) {
+      alert('Erro ao carregar gincanas: ' + err.message);
+    } finally {
+      setGincanasLoading(false);
+    }
+  };
+
+  const openCreateModal = () => {
+    setEditingGincana(null);
+    setGincanasForm({ message: '', scheduledDate: '' });
+    setShowGincanasModal('create');
+  };
+
+  const openEditModal = (gincana) => {
+    setEditingGincana(gincana);
+    // datetime-local expects "YYYY-MM-DDTHH:MM" (local time, no Z)
+    const localDt = new Date(gincana.scheduledDate).toISOString().slice(0, 16);
+    setGincanasForm({ message: gincana.message, scheduledDate: localDt });
+    setShowGincanasModal('edit');
+  };
+
+  const closeModal = () => {
+    setShowGincanasModal(false);
+    setEditingGincana(null);
+    setGincanasForm({ message: '', scheduledDate: '' });
+  };
+
+  const handleGincanasSubmit = async (e) => {
+    e.preventDefault();
+    setGincanasSubmitting(true);
+    try {
+      // Convert local datetime to UTC ISO string
+      const isoDate = new Date(gincanasForm.scheduledDate).toISOString();
+      if (showGincanasModal === 'create') {
+        await api.adminCreateGincana(user.userId, gincanasForm.message, isoDate);
+        alert('Gincana criada e agendada com sucesso!');
+      } else {
+        await api.adminUpdateGincana(user.userId, editingGincana.gincanasId, gincanasForm.message, isoDate);
+        alert('Gincana atualizada com sucesso!');
+      }
+      closeModal();
+      loadGincanas();
+    } catch (err) {
+      alert('Erro: ' + err.message);
+    } finally {
+      setGincanasSubmitting(false);
+    }
+  };
+
+  const handleDeleteGincana = async (gincana) => {
+    const dateStr = new Date(gincana.scheduledDate).toLocaleString('pt-BR');
+    if (!window.confirm(`Excluir a gincana agendada para ${dateStr}?`)) return;
+    try {
+      await api.adminDeleteGincana(user.userId, gincana.gincanasId);
+      alert('Gincana excluída!');
+      loadGincanas();
+    } catch (err) {
+      alert('Erro ao excluir gincana: ' + err.message);
+    }
+  };
+
   if (!user || user.role !== 'admin') {
     return <div style={{ padding: '2rem', textAlign: 'center' }}>Carregando...</div>;
   }
@@ -117,7 +191,7 @@ const Admin = () => {
           borderBottom: '1px solid var(--border-glass)',
           background: 'rgba(0,0,0,0.2)' 
         }}>
-          {['users', 'games', 'announcements'].map(tab => (
+          {['users', 'games', 'announcements', 'gincanas'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -139,6 +213,7 @@ const Admin = () => {
               {tab === 'users' && 'Usuários & Moedas'}
               {tab === 'games' && 'Jogos & Moderação'}
               {tab === 'announcements' && 'Discord @everyone'}
+              {tab === 'gincanas' && '🎮 Gincanas'}
             </button>
           ))}
         </div>
@@ -344,8 +419,209 @@ const Admin = () => {
             </div>
           )}
 
+          {/* TAB: GINCANAS */}
+          {activeTab === 'gincanas' && (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+              {/* Header row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <CalendarDays size={22} color="var(--primary)" />
+                  <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Calendário de Gincanas</h3>
+                </div>
+                <button onClick={openCreateModal} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}>
+                  <Plus size={18} /> Criar Gincana
+                </button>
+              </div>
+
+              {gincanasLoading && (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px' }}>Carregando...</div>
+              )}
+
+              {!gincanasLoading && gincanas.length === 0 && (
+                <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <CalendarDays size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                  <p style={{ margin: 0 }}>Nenhuma gincana cadastrada ainda.</p>
+                </div>
+              )}
+
+              {/* Upcoming gincanas */}
+              {gincanas.filter(g => g.status === 'scheduled' && new Date(g.scheduledDate) > new Date()).length > 0 && (
+                <div>
+                  <p style={{ margin: '0 0 12px 0', fontSize: '0.8rem', fontWeight: '700', letterSpacing: '1px', color: 'var(--primary)', textTransform: 'uppercase' }}>
+                    📅 Próximas
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {gincanas.filter(g => g.status === 'scheduled' && new Date(g.scheduledDate) > new Date()).map(g => (
+                      <div key={g.gincanasId} className="glass-panel" style={{
+                        padding: '16px 20px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        borderLeft: '4px solid var(--primary)',
+                        gap: '16px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: 1, minWidth: 0 }}>
+                          <Clock size={20} color="var(--primary)" style={{ flexShrink: 0 }} />
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ margin: '0 0 4px 0', fontWeight: '700', fontSize: '1rem' }}>
+                              {new Date(g.scheduledDate).toLocaleString('pt-BR', { dateStyle: 'long', timeStyle: 'short' })}
+                            </p>
+                            <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {(g.message || g.embedJson || '').length > 80 ? (g.message || g.embedJson || '').slice(0, 80) + '…' : (g.message || g.embedJson || '')}
+                            </p>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                          <button
+                            onClick={() => openEditModal(g)}
+                            className="btn-secondary"
+                            style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            <Pencil size={14} /> Editar
+                          </button>
+                          <button
+                            onClick={() => handleDeleteGincana(g)}
+                            className="btn-danger"
+                            style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            <Trash2 size={14} /> Excluir
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Past gincanas */}
+              {gincanas.filter(g => g.status !== 'scheduled' || new Date(g.scheduledDate) <= new Date()).length > 0 && (
+                <div>
+                  <p style={{ margin: '0 0 12px 0', fontSize: '0.8rem', fontWeight: '700', letterSpacing: '1px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                    ✅ Realizadas
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {gincanas.filter(g => g.status !== 'scheduled' || new Date(g.scheduledDate) <= new Date()).map(g => (
+                      <div key={g.gincanasId} className="glass-panel" style={{
+                        padding: '16px 20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '14px',
+                        opacity: 0.55,
+                        borderLeft: '4px solid var(--text-muted)',
+                      }}>
+                        <CheckCircle2 size={20} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                        <div>
+                          <p style={{ margin: '0 0 4px 0', fontWeight: '600', fontSize: '0.95rem' }}>
+                            {new Date(g.scheduledDate).toLocaleString('pt-BR', { dateStyle: 'long', timeStyle: 'short' })}
+                          </p>
+                          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                            {(g.message || g.embedJson || '').length > 100 ? (g.message || g.embedJson || '').slice(0, 100) + '…' : (g.message || g.embedJson || '')}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+
         </div>
       </div>
+
+      {/* ── Gincana Modal (Create / Edit) ──────────────────────────────── */}
+      {showGincanasModal && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px',
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%', maxWidth: '540px',
+            padding: '32px',
+            position: 'relative',
+            border: '1px solid var(--primary)',
+            boxShadow: '0 0 40px rgba(139,92,246,0.25)',
+          }}>
+            {/* Close button */}
+            <button
+              onClick={closeModal}
+              style={{
+                position: 'absolute', top: '16px', right: '16px',
+                background: 'transparent', border: 'none',
+                color: 'var(--text-muted)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center',
+              }}
+            >
+              <X size={20} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+              <CalendarDays size={24} color="var(--primary)" />
+              <h3 style={{ margin: 0 }}>
+                {showGincanasModal === 'create' ? 'Criar Nova Gincana' : 'Editar Gincana'}
+              </h3>
+            </div>
+
+            <form onSubmit={handleGincanasSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                  Data e Hora da Gincana
+                </label>
+                <input
+                  type="datetime-local"
+                  className="input-field"
+                  value={gincanasForm.scheduledDate}
+                  onChange={e => setGincanasForm(f => ({ ...f, scheduledDate: e.target.value }))}
+                  required
+                  min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                  Mensagem do Discord (texto do embed)
+                </label>
+                <textarea
+                  className="textarea-field"
+                  value={gincanasForm.message}
+                  onChange={e => setGincanasForm(f => ({ ...f, message: e.target.value }))}
+                  placeholder="Descreva a gincana. Ex: 🎮 Gincana de reviews! Participe e ganhe moedas..."
+                  required
+                  style={{ minHeight: '140px' }}
+                />
+                <p style={{ margin: '6px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Suporta formatação Markdown do Discord (**, *, __, etc.)
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={closeModal} className="btn-secondary">
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={gincanasSubmitting}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <CalendarDays size={16} />
+                  {gincanasSubmitting
+                    ? 'Salvando...'
+                    : showGincanasModal === 'create' ? 'Criar & Agendar' : 'Salvar Alterações'
+                  }
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

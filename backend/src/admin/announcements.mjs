@@ -1,12 +1,16 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { timingSafeEqual } from 'crypto';
 
 import { getTableName } from '../utils/env.mjs';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
+const sm = new SecretsManagerClient({});
 
 const USERS_TABLE = getTableName(process.env.USERS_TABLE, 'IndieFeedback-Users');
+const STAGE = process.env.STAGE || 'dev';
 
 const checkAdmin = async (adminId) => {
   if (!adminId) return false;
@@ -20,6 +24,59 @@ const checkAdmin = async (adminId) => {
 
 export const handler = async (event) => {
   try {
+
+    // ── EventBridge Scheduler direct invocation ──────────────────────────────
+    // The EventBridge Scheduler does not go through API Gateway, so there are
+    // no auth headers. We authenticate using a shared internalSecret stored in
+    // Secrets Manager, compared with timingSafeEqual to prevent timing attacks.
+    if (event._source === 'eventbridge-scheduler') {
+      const smRes = await sm.send(new GetSecretValueCommand({
+        SecretId: `IndieFeedbackDiscord-${STAGE}`,
+      }));
+      const { INTERNAL_SECRET } = JSON.parse(smRes.SecretString);
+
+      const incoming = Buffer.from(event.internalSecret || '');
+      const expected = Buffer.from(INTERNAL_SECRET);
+
+      if (incoming.length !== expected.length || !timingSafeEqual(incoming, expected)) {
+        console.error('SECURITY: internalSecret inválido — possível tentativa de spoofing!');
+        return {
+          statusCode: 403,
+          body: JSON.stringify({ error: 'Unauthorized' }),
+        };
+      }
+
+      // Secret válido — postar o embed no Discord
+      const botToken = process.env.DISCORD_BOT_TOKEN;
+      const announcementsChannelId = process.env.DISCORD_ANNOUNCEMENTS_CHANNEL_ID;
+
+      if (!botToken || !announcementsChannelId) {
+        console.error('Discord configuration missing');
+        return { statusCode: 500, body: JSON.stringify({ error: 'Discord configuration missing' }) };
+      }
+
+      const embed = JSON.parse(event.embedJson);
+
+      const discordRes = await fetch(
+        `https://discord.com/api/v10/channels/${announcementsChannelId}/messages`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ embeds: [embed] }),
+        }
+      );
+
+      if (!discordRes.ok) {
+        const errData = await discordRes.json();
+        console.error('Discord API Error (gincana scheduled):', errData);
+        return { statusCode: 500, body: JSON.stringify({ error: 'Failed to post gincana to Discord', details: errData }) };
+      }
+
+      console.log(`Gincana ${event.gincanasId} postada no Discord com sucesso.`);
+      return { statusCode: 200, body: JSON.stringify({ message: 'Gincana postada com sucesso' }) };
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const adminId = event.headers?.['x-user-id'] || event.queryStringParameters?.adminId;
     const isAdmin = await checkAdmin(adminId);
 

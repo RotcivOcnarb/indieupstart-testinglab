@@ -31,6 +31,7 @@ Globals:
         GAMES_TABLE: !Ref GamesTable
         REVIEWS_TABLE: !Ref ReviewsTable
         WEEKLY_GAME_TABLE: !Ref WeeklyGameTable
+        GINCANAS_TABLE: !Ref GincanasTable
         BANNERS_BUCKET: !Ref BannersBucket
         DISCORD_CLIENT_ID: !Sub "{{resolve:secretsmanager:IndieFeedbackDiscord-${Stage}:SecretString:CLIENT_ID}}"
         DISCORD_CLIENT_SECRET: !Sub "{{resolve:secretsmanager:IndieFeedbackDiscord-${Stage}:SecretString:CLIENT_SECRET}}"
@@ -95,6 +96,18 @@ Resources:
           AttributeType: S
       KeySchema:
         - AttributeName: weekId
+          KeyType: HASH
+
+  GincanasTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "IndieFeedback-Gincanas-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: gincanasId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: gincanasId
           KeyType: HASH
 
   # =========================================================================
@@ -205,6 +218,7 @@ Resources:
         AllowMethods:
           - GET
           - POST
+          - PUT
           - DELETE
           - OPTIONS
 
@@ -415,12 +429,94 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref UsersTable
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:IndieFeedbackDiscord-${Stage}*"
       Events:
         PostAnnouncement:
           Type: HttpApi
           Properties:
             Path: /admin/announcements
             Method: POST
+            ApiId: !Ref HttpApiGateway
+
+  # =========================================================================
+  # IAM Role for EventBridge Scheduler → invoke AdminAnnouncementsFunction
+  # =========================================================================
+  GincanasSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "IndieFeedback-GincanasSchedulerRole-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeAnnouncementsLambda
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt AdminAnnouncementsFunction.Arn
+
+  # =========================================================================
+  # Admin Gincanas (CRUD + EventBridge Scheduler)
+  # =========================================================================
+  AdminGincanasFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: admin/gincanas.handler
+      Environment:
+        Variables:
+          ANNOUNCEMENTS_FUNCTION_ARN: !GetAtt AdminAnnouncementsFunction.Arn
+          SCHEDULER_ROLE_ARN: !GetAtt GincanasSchedulerRole.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GincanasTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - scheduler:CreateSchedule
+                - scheduler:UpdateSchedule
+                - scheduler:DeleteSchedule
+                - scheduler:GetSchedule
+                - iam:PassRole
+              Resource: "*"
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:IndieFeedbackDiscord-${Stage}*"
+      Events:
+        ListGincanas:
+          Type: HttpApi
+          Properties:
+            Path: /admin/gincanas
+            Method: GET
+            ApiId: !Ref HttpApiGateway
+        CreateGincana:
+          Type: HttpApi
+          Properties:
+            Path: /admin/gincanas
+            Method: POST
+            ApiId: !Ref HttpApiGateway
+        UpdateGincana:
+          Type: HttpApi
+          Properties:
+            Path: /admin/gincanas/{id}
+            Method: PUT
+            ApiId: !Ref HttpApiGateway
+        DeleteGincana:
+          Type: HttpApi
+          Properties:
+            Path: /admin/gincanas/{id}
+            Method: DELETE
             ApiId: !Ref HttpApiGateway
 
   # =========================================================================

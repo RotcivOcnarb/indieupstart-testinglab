@@ -8,7 +8,7 @@ cached = true
 parallel = true
 
 [default.deploy.parameters]
-capabilities = "CAPABILITY_IAM"
+capabilities = "CAPABILITY_NAMED_IAM"
 confirm_changeset = false
 resolve_s3 = true
 
@@ -23,7 +23,7 @@ stack_name = "indie-feedback-backend-dev"
 s3_prefix = "indie-feedback-backend-dev"
 region = "sa-east-1"
 confirm_changeset = true
-capabilities = "CAPABILITY_IAM"
+capabilities = "CAPABILITY_NAMED_IAM"
 parameter_overrides = 'Stage="dev" SiteBaseUrl="http://indie-feedback-frontend-dev-145908329026-sa-east-1.s3-website-sa-east-1.amazonaws.com"'
 resolve_s3 = true
 

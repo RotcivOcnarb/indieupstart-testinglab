@@ -162,5 +162,47 @@ export const api = {
       throw new Error(data.error || 'Falha ao carregar Jogo da Semana');
     }
     return await res.json();
-  }
+  },
+
+  // --- Admin Gincanas ---
+  async adminGetGincanas(adminId) {
+    const res = await fetch(`${API_BASE_URL}/admin/gincanas`, {
+      headers: { 'x-user-id': adminId },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Falha ao carregar gincanas');
+    return data;
+  },
+
+  async adminCreateGincana(adminId, message, scheduledDate) {
+    const res = await fetch(`${API_BASE_URL}/admin/gincanas`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-user-id': adminId },
+      body: JSON.stringify({ message, scheduledDate }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Falha ao criar gincana');
+    return data;
+  },
+
+  async adminUpdateGincana(adminId, gincanasId, message, scheduledDate) {
+    const res = await fetch(`${API_BASE_URL}/admin/gincanas/${gincanasId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-user-id': adminId },
+      body: JSON.stringify({ message, scheduledDate }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Falha ao atualizar gincana');
+    return data;
+  },
+
+  async adminDeleteGincana(adminId, gincanasId) {
+    const res = await fetch(`${API_BASE_URL}/admin/gincanas/${gincanasId}`, {
+      method: 'DELETE',
+      headers: { 'x-user-id': adminId },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Falha ao excluir gincana');
+    return data;
+  },
 };
