@@ -1,9 +1,0 @@
-Agendamento de gincanas
-
-tem q ter uma tabela no dynamo sobre gincanas, tem q ter nessa tabela um id pra gincana, o json da mensagem embed q vai ser enviado pro discord, e a data da gincana.
-
-No front end, APENAS PRA ADMIN, tem q ter um painel novo q liste todas as gincanas q foram feitas, e tbm o botão " Criar gincana", q vai abrir um pop up com 2 inputs, um pra data, e outro pra mensagem. Vc salva isso na tabela do dynamo
-
-A lista de gincanas tem q ser mostrada como um calendário mostrando as próximas gincanas e as gincanas que já aconteceram. EU posso excluir ou editar o texto e data de gincanas que AINDA Não aconteceram com um popup de editar gincana
-
-Eu posso criar uma gincana via um formulario que eu escrevo qual é o texto q vai ser mandado pro discord, e também a data da gincana. Ao criar a gincana, ele vai adicionar ela no dynamo db, e tbm vai criar uma entry single time no event bridge pra agendar a gincana, quando esse event bridge disparar, vai pingar num lambda mandando os parametros da gincana, esse lambda vai postar a mensagem no discord (acho q parando pra pensar, não precisa criar uma lambda nova, daria pra usar a lambda de admin announcements q já existe). Vc consegue fazer isso?
