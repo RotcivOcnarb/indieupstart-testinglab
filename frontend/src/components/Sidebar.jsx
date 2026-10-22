@@ -1,15 +1,15 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  PlusCircle, 
-  Gamepad2, 
-  FolderKanban, 
-  History, 
-  HelpCircle, 
-  Coins, 
+import {
+  LayoutDashboard,
+  PlusCircle,
+  Gamepad2,
+  FolderKanban,
+  History,
+  HelpCircle,
+  Coins,
   ShieldAlert,
-  LogOut 
+  LogOut
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -21,24 +21,22 @@ export const Sidebar = () => {
       {/* Brand Header */}
       <div style={{ paddingBottom: '24px', borderBottom: '1px solid var(--border-glass)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ 
-            width: '42px', 
-            height: '42px', 
-            borderRadius: '12px', 
-            background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '1.4rem'
-          }}>
-            🎮
-          </div>
+          <img
+            src="/Round 1-1.png"
+            alt="Logo"
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: 'var(--radius-sm)',
+              objectFit: 'contain'
+            }}
+          />
           <div>
             <h2 style={{ fontSize: '1.25rem', fontWeight: '800', background: 'linear-gradient(90deg, #fff, #9ca3af)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              INDIE FEEDBACK
+              INDIE UPSTART
             </h2>
             <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>
-              Ecosistema Playtest
+              Laboratório de Testes
             </span>
           </div>
         </div>
@@ -46,20 +44,20 @@ export const Sidebar = () => {
 
       {/* User Card */}
       {user && (
-        <div style={{ 
-          margin: '20px 0', 
-          padding: '12px 14px', 
-          background: 'rgba(255,255,255,0.03)', 
+        <div style={{
+          margin: '20px 0',
+          padding: '12px 14px',
+          background: 'rgba(255,255,255,0.03)',
           borderRadius: 'var(--radius-sm)',
           border: '1px solid var(--border-glass)',
           display: 'flex',
           alignItems: 'center',
           gap: '12px'
         }}>
-          <img 
-            src={user.avatarUrl} 
-            alt={user.username} 
-            style={{ width: '38px', height: '38px', borderRadius: '50%', border: '2px solid var(--primary)' }} 
+          <img
+            src={user.avatarUrl}
+            alt={user.username}
+            style={{ width: '38px', height: '38px', borderRadius: '50%', border: '2px solid var(--primary)' }}
           />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: '700', fontSize: '0.9rem', color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -75,9 +73,9 @@ export const Sidebar = () => {
 
       {/* Navigation Menu */}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-        <NavLink 
-          to="/" 
-          end 
+        <NavLink
+          to="/"
+          end
           style={({ isActive }) => ({
             display: 'flex',
             alignItems: 'center',
@@ -96,8 +94,8 @@ export const Sidebar = () => {
           <span>Dashboard</span>
         </NavLink>
 
-        <NavLink 
-          to="/publish" 
+        <NavLink
+          to="/publish"
           style={({ isActive }) => ({
             display: 'flex',
             alignItems: 'center',
@@ -116,8 +114,8 @@ export const Sidebar = () => {
           <span>Publicar Jogo</span>
         </NavLink>
 
-        <NavLink 
-          to="/reviews" 
+        <NavLink
+          to="/reviews"
           style={({ isActive }) => ({
             display: 'flex',
             alignItems: 'center',
@@ -136,8 +134,8 @@ export const Sidebar = () => {
           <span>Submeter Review</span>
         </NavLink>
 
-        <NavLink 
-          to="/my-games" 
+        <NavLink
+          to="/my-games"
           style={({ isActive }) => ({
             display: 'flex',
             alignItems: 'center',
@@ -156,8 +154,8 @@ export const Sidebar = () => {
           <span>Meus Jogos</span>
         </NavLink>
 
-        <NavLink 
-          to="/history" 
+        <NavLink
+          to="/history"
           style={({ isActive }) => ({
             display: 'flex',
             alignItems: 'center',
@@ -176,8 +174,8 @@ export const Sidebar = () => {
           <span>Meu Histórico</span>
         </NavLink>
 
-        <NavLink 
-          to="/rules" 
+        <NavLink
+          to="/rules"
           style={({ isActive }) => ({
             display: 'flex',
             alignItems: 'center',
@@ -195,13 +193,36 @@ export const Sidebar = () => {
           <HelpCircle size={18} />
           <span>Regras & FAQ</span>
         </NavLink>
+
+        {user && user.role === 'admin' && (
+          <NavLink
+            to="/admin"
+            style={({ isActive }) => ({
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-sm)',
+              color: isActive ? '#fff' : 'var(--text-muted)',
+              background: isActive ? 'linear-gradient(90deg, rgba(239, 68, 68, 0.25), transparent)' : 'transparent',
+              borderLeft: isActive ? '3px solid #ef4444' : '3px solid transparent',
+              fontWeight: isActive ? '700' : '500',
+              textDecoration: 'none',
+              transition: 'all 0.2s ease',
+              marginTop: 'auto'
+            })}
+          >
+            <ShieldAlert size={18} color="#ef4444" />
+            <span style={{ color: '#ef4444' }}>Admin Panel</span>
+          </NavLink>
+        )}
       </nav>
 
       {/* Footer / Logout */}
       <div style={{ paddingTop: '16px', borderTop: '1px solid var(--border-glass)' }}>
-        <button 
-          onClick={logout} 
-          className="btn-secondary" 
+        <button
+          onClick={logout}
+          className="btn-secondary"
           style={{ width: '100%', justifyContent: 'center', color: 'var(--danger)' }}
         >
           <LogOut size={16} />

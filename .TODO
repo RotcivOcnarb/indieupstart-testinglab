@@ -1,0 +1,19 @@
+cron job pelo amazon event bridge
+
+toda segunda feira as 14h ele tem q rodar um script lambda. (Eu q preciso criar esse evento no painel do aws ou vc consegue fazer por aqui? lembra q tem q ter versão -dev e versão -prod)
+
+Esse script lambda vai fazer o seguinte. Ele tem q selecionar um dos jogos publicados aleatóriamente pra ser o "jogo da semana". Tem que criar uma tabela nova no dynamoDB pra armazenar quais foram os jogos de cada semana. (eu preciso criar a tabela do dynamo no painel ou vc consegue criar ela por aqui? lembra q tem q ter versão -dev e versão -prod)
+Ele não pode repetir um jogo que já foi selecioando numa semana anterior, EXCETO se TODOS os jogos já tenham sido selecionados, então ele dá prioridade pros jogos q tenham sido selecionados menos vezes (Um jogo NUNCA Pode ser selecionado 2 vezes seguidas.)
+A forma como eu selecionaria o jogo é assim:
+1- faz uma lista com todos os jogos cadastrados hoje (puxa da tabela de jogos)
+2- pega da tabela de jogos da semana o jogo mais recente, e remove ele da lista (se não tiver nenhum jogo na tabela de jogos da semana, pula essa parte)
+3- faz um dicionario que mapeia o ID do jogo à quantas cópias tem daquele jogo na tabela de jogo da semana
+4- enquanto popula o dicionario, vai armazenando qual é o menor número de cópias q tem
+5- agora remove do dicionario todos os jogos q tem mais cópias do q o menor numero de cópias
+6- escolhe um jogo aleatório do dicionario que sobrou (se não tiver nenhum no dicionario, só escohe um jogo aleatório da tabela de jogos cadastrados)
+
+Depois de selecionar o jogo da semana, ele vai fazer uma publicação no canal de anuncios do discord falando sobre o jogo da semana, anexando a imagem do banner, falando o nome do jogo, sinopse e quem é o criador. ALém disso, todos os review q fizerem desse jogo essa semana vão dar o DOBRO de moedas.
+
+No backend na hora de fazer um review, ele tem q checar na tabela de jogos da semana qual é o jogo dessa semana, e se o usuario tiver fazendo um review desse jogo, tem q dar o dobro de moedas pra ele.
+
+No fronten, no dashboard, sempre precisa ter um banner dizendo qual é o jogo da semana, e um link pra ir pra página de review, avisando q vc ganha o dobro de moedas, e tbm um countdown (cronometro) até a próxima seleção do jogo da semana, e tbm tem q mostrar quantos reviews esse jogo já tem até agora

@@ -1,8 +1,10 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
+import { getResourceName } from '../utils/env.mjs';
+
 const s3Client = new S3Client({});
-const BANNERS_BUCKET = process.env.BANNERS_BUCKET || 'indie-feedback-banners';
+const BANNERS_BUCKET = getResourceName(process.env.BANNERS_BUCKET, 'indie-feedback-banners');
 
 export const handler = async (event) => {
   try {
@@ -18,7 +20,8 @@ export const handler = async (event) => {
       };
     }
 
-    const key = `banners/${Date.now()}_${fileName || 'banner.png'}`;
+    const safeFileName = (fileName || 'banner.png').replace(/[^a-zA-Z0-9.-]/g, '_');
+    const key = `banners/${Date.now()}_${safeFileName}`;
     const command = new PutObjectCommand({
       Bucket: BANNERS_BUCKET,
       Key: key,

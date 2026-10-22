@@ -1,0 +1,59 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "deploy:dev",
+			"path": "backend",
+			"group": "none",
+			"problemMatcher": [],
+			"label": "Deploy Backend - DEV (AWS)",
+			"detail": "sam build && sam deploy --config-env dev"
+		},
+		{
+			"type": "npm",
+			"script": "deploy:dev:guided",
+			"path": "backend",
+			"group": "none",
+			"problemMatcher": [],
+			"label": "Deploy Backend - DEV Guided (AWS)",
+			"detail": "sam build && sam deploy --guided --config-env dev"
+		},
+		{
+			"type": "npm",
+			"script": "deploy:prod",
+			"path": "backend",
+			"group": "none",
+			"problemMatcher": [],
+			"label": "Deploy Backend - PROD (AWS)",
+			"detail": "sam build && sam deploy --config-env prod"
+		},
+		{
+			"type": "npm",
+			"script": "deploy:prod:guided",
+			"path": "backend",
+			"group": "none",
+			"problemMatcher": [],
+			"label": "Deploy Backend - PROD Guided (AWS)",
+			"detail": "sam build && sam deploy --guided --config-env prod"
+		},
+		{
+			"type": "npm",
+			"script": "deploy:dev",
+			"path": "frontend",
+			"group": "none",
+			"problemMatcher": [],
+			"label": "Deploy Frontend - DEV (S3)",
+			"detail": "vite build --mode development && aws s3 sync dist/ s3://indie-feedback-frontend-dev-145908329026-sa-east-1 --delete --profile rots-pessoal"
+		},
+		{
+			"type": "npm",
+			"script": "deploy:prod",
+			"path": "frontend",
+			"group": "none",
+			"problemMatcher": [],
+			"label": "Deploy Frontend - PROD (S3)",
+			"detail": "vite build --mode production && aws s3 sync dist/ s3://indie-feedback-frontend-prod-145908329026-sa-east-1 --delete --profile rots-pessoal"
+		}
+	]
+}

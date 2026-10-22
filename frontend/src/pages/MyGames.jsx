@@ -21,13 +21,14 @@ export const MyGames = () => {
       if (!user) return;
       const res = await api.getGames(user.userId);
       if (res && res.games) {
-        // Filter games created by user or show all for demo
-        const userGames = res.games.filter(g => g.authorId === user.userId || g.authorName === user.username);
-        setMyGames(userGames.length > 0 ? userGames : res.games);
-      }
+        // Filtra apenas jogos criados pelo usuário
+        const userGames = res.games.filter(g => g.authorId === user.userId);
+        setMyGames(userGames);
 
-      const localReviews = JSON.parse(localStorage.getItem('indie_reviews') || '[]');
-      setReviews(localReviews);
+        // Coleta todas as reviews dos jogos do usuário (vindas do DynamoDB via backend)
+        const allReviews = userGames.flatMap(g => (g.reviews || []).map(r => ({ ...r, gameTitle: g.title })));
+        setReviews(allReviews);
+      }
       setLoading(false);
     };
 

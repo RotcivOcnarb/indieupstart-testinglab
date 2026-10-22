@@ -18,13 +18,17 @@ resolve_s3 = true
 # =========================================================================
 [dev]
 [dev.deploy.parameters]
+profile = "rots-pessoal"
 stack_name = "indie-feedback-backend-dev"
 s3_prefix = "indie-feedback-backend-dev"
-region = "us-east-1"
-confirm_changeset = false
+region = "sa-east-1"
+confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = 'Stage="dev"'
+parameter_overrides = 'Stage="dev" SiteBaseUrl="http://indie-feedback-frontend-dev-145908329026-sa-east-1.s3-website-sa-east-1.amazonaws.com"'
 resolve_s3 = true
+
+[dev.global.parameters]
+region = "sa-east-1"
 
 # =========================================================================
 # PROD STAGE CONFIGURATION
@@ -32,10 +36,13 @@ resolve_s3 = true
 # =========================================================================
 [prod]
 [prod.deploy.parameters]
+profile = "rots-pessoal"
 stack_name = "indie-feedback-backend-prod"
 s3_prefix = "indie-feedback-backend-prod"
-region = "us-east-1"
+region = "sa-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = 'Stage="prod"'
+parameter_overrides = 'Stage="prod" SiteBaseUrl="http://indie-feedback-frontend-prod-145908329026-sa-east-1.s3-website-sa-east-1.amazonaws.com"'
 resolve_s3 = true
+disable_rollback = true
+image_repositories = []

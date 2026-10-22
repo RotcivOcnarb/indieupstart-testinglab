@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, Upload, Flame, Coins, ShieldAlert, CheckCircle, AlertTriangle } from 'lucide-react';
+import { PlusCircle, Upload, Flame, Coins, ShieldAlert, CheckCircle, AlertTriangle, Search, X, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import { TagSelector } from '../components/TagSelector';
 
 export const PublishGame = () => {
   const { user, updateBalance } = useAuth();
@@ -12,7 +13,7 @@ export const PublishGame = () => {
   const [description, setDescription] = useState('');
   const [stage, setStage] = useState('Alpha');
   const [gameUrl, setGameUrl] = useState('');
-  const [tagsInput, setTagsInput] = useState('Ação, Plataforma, Pixel Art');
+  const [selectedTags, setSelectedTags] = useState([]);
   const [bannerUrl, setBannerUrl] = useState('');
   const [isNsfw, setIsNsfw] = useState(false);
   const [hasAiContent, setHasAiContent] = useState(false);
@@ -22,6 +23,14 @@ export const PublishGame = () => {
   const [totalGames, setTotalGames] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Admin: publicar em nome de outro usuário
+  const isAdmin = user?.role === 'admin';
+  const [adminTargetQuery, setAdminTargetQuery] = useState('');
+  const [adminTargetResults, setAdminTargetResults] = useState([]);
+  const [adminTargetUser, setAdminTargetUser] = useState(null);
+  const [adminSearching, setAdminSearching] = useState(false);
+  const [adminSearched, setAdminSearched] = useState(false);
 
   useEffect(() => {
     const fetchGamesCount = async () => {
@@ -33,8 +42,8 @@ export const PublishGame = () => {
     fetchGamesCount();
   }, [user]);
 
-  // C = min(N, 10)
-  const cost = Math.min(totalGames, 10);
+  // C = min(5, floor(N/2))
+  const cost = Math.min(5, Math.floor(totalGames / 2));
   const hasEnoughCoins = (user?.balance || 0) >= cost;
 
   const handleFileUpload = async (e) => {
@@ -55,21 +64,59 @@ export const PublishGame = () => {
     setUploading(true);
     setError('');
     try {
+      // 1. Solicita a Pre-signed URL de upload para o backend
       const uploadRes = await api.getUploadUrl(file.type, file.name);
+
+      if (!uploadRes || !uploadRes.uploadUrl) {
+        throw new Error('Não foi possível obter a URL de upload do S3.');
+      }
+
+      // 2. Faz o upload DIRETO do arquivo para o S3 via PUT na Pre-signed URL
+      const s3Res = await fetch(uploadRes.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type,
+        },
+        body: file,
+      });
+
+      if (!s3Res.ok) {
+        throw new Error(`Falha no upload direto para o S3. Status: ${s3Res.status}`);
+      }
+
       setBannerUrl(uploadRes.publicUrl);
-      setSuccess('Banner carregado com sucesso via S3 Pre-signed URL!');
+      setSuccess('Banner enviado e salvo com sucesso no S3!');
     } catch (err) {
-      setError('Erro ao enviar imagem do banner.');
+      console.error('Erro no upload do banner:', err);
+      setError(err.message || 'Erro ao enviar imagem do banner para o S3.');
     } finally {
       setUploading(false);
     }
   };
 
+  const handleAdminSearchUsers = async () => {
+    if (!adminTargetQuery.trim()) return;
+    setAdminSearching(true);
+    try {
+      const data = await api.adminGetUsers(user.userId, adminTargetQuery);
+      setAdminTargetResults(data);
+      setAdminSearched(true);
+    } catch (err) {
+      setError('Erro ao buscar usuários: ' + err.message);
+    } finally {
+      setAdminSearching(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!hasEnoughCoins) {
-      setError(`Saldo insuficiente. É necessário acumular pelo menos ${cost} Moedas de Teste avaliando outros jogos.`);
-      return;
+
+    // Se admin publicando por outro usuário, ignora custo de moedas
+    if (!isAdmin || !adminTargetUser) {
+      if (!hasEnoughCoins) {
+        setError(`Saldo insuficiente. É necessário acumular pelo menos ${cost} Moedas de Teste avaliando outros jogos.`);
+        return;
+      }
     }
 
     if (!title || !description || !gameUrl) {
@@ -81,22 +128,38 @@ export const PublishGame = () => {
     setError('');
 
     try {
-      const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
-      const res = await api.createGame({
-        authorId: user.userId,
-        authorName: user.username,
-        title,
-        description,
-        stage,
-        tags,
-        gameUrl,
-        bannerUrl: bannerUrl || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&q=80',
-        isNsfw,
-        hasAiContent,
-      });
-
-      updateBalance(-cost);
-      setSuccess('Jogo publicado com sucesso e postado no Fórum Discord!');
+      if (isAdmin && adminTargetUser) {
+        // Publicar como admin em nome de outro usuário
+        await api.adminCreateGame(user.userId, {
+          authorId: adminTargetUser.userId,
+          authorName: adminTargetUser.username,
+          title,
+          description,
+          stage,
+          tags: selectedTags,
+          gameUrl,
+          bannerUrl: bannerUrl || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&q=80',
+          isNsfw,
+          hasAiContent,
+        });
+        setSuccess(`Jogo publicado com sucesso em nome de ${adminTargetUser.username}!`);
+      } else {
+        // Publicação normal
+        await api.createGame({
+          authorId: user.userId,
+          authorName: user.username,
+          title,
+          description,
+          stage,
+          tags: selectedTags,
+          gameUrl,
+          bannerUrl: bannerUrl || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&q=80',
+          isNsfw,
+          hasAiContent,
+        });
+        updateBalance(-cost);
+        setSuccess('Jogo publicado com sucesso e postado no Fórum Discord!');
+      }
       setTimeout(() => {
         navigate('/my-games');
       }, 1500);
@@ -136,7 +199,7 @@ export const PublishGame = () => {
                 Custo de Publicação: {cost} Moedas de Teste
               </div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Fórmula: C = min({totalGames} jogos ativos, 10). Seu saldo atual: <strong>{user?.balance || 0} moedas</strong>.
+                Fórmula: C = min({totalGames}/2 jogos ativos, 5). Seu saldo atual: <strong>{user?.balance || 0} moedas</strong>.
               </div>
             </div>
           </div>
@@ -166,7 +229,7 @@ export const PublishGame = () => {
             <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>
               Título do Jogo *
             </label>
-            <input 
+            <input
               type="text"
               className="input-field"
               placeholder="Ex: Cyber Runner 2099"
@@ -189,17 +252,11 @@ export const PublishGame = () => {
               </select>
             </div>
 
-            <div>
+            <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>
-                Tags (separadas por vírgula)
+                Tags do Jogo (máximo 5)
               </label>
-              <input 
-                type="text"
-                className="input-field"
-                placeholder="RPG, Terror, Pixel Art, Sandbox"
-                value={tagsInput}
-                onChange={(e) => setTagsInput(e.target.value)}
-              />
+              <TagSelector selectedTags={selectedTags} onChange={setSelectedTags} />
             </div>
           </div>
 
@@ -207,7 +264,7 @@ export const PublishGame = () => {
             <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>
               Link de Acesso ao Jogo (Itch.io, Steam, Web, etc.) *
             </label>
-            <input 
+            <input
               type="url"
               className="input-field"
               placeholder="https://sua-empresa.itch.io/meu-jogo"
@@ -221,7 +278,7 @@ export const PublishGame = () => {
             <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '0.9rem' }}>
               Sinopse / Descrição Completa *
             </label>
-            <textarea 
+            <textarea
               className="textarea-field"
               placeholder="Descreva o enredo, mecânicas principais e o que você gostaria que os playtesters prestassem atenção..."
               value={description}
@@ -236,8 +293,8 @@ export const PublishGame = () => {
               Banner de Capa (S3 Upload Direct via Pre-signed URL)
             </label>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <input 
-                type="file" 
+              <input
+                type="file"
                 accept="image/png, image/jpeg, image/webp"
                 onChange={handleFileUpload}
                 id="banner-file"
@@ -254,10 +311,10 @@ export const PublishGame = () => {
               )}
             </div>
             {bannerUrl && (
-              <img 
-                src={bannerUrl} 
-                alt="Banner Preview" 
-                style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', marginTop: '12px', border: '1px solid var(--border-glass)' }} 
+              <img
+                src={bannerUrl}
+                alt="Banner Preview"
+                style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', marginTop: '12px', border: '1px solid var(--border-glass)' }}
               />
             )}
           </div>
@@ -265,9 +322,9 @@ export const PublishGame = () => {
           {/* Toggles NSFW & AI */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: 'var(--radius-sm)' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-              <input 
-                type="checkbox" 
-                checked={isNsfw} 
+              <input
+                type="checkbox"
+                checked={isNsfw}
                 onChange={(e) => setIsNsfw(e.target.checked)}
                 style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
               />
@@ -278,9 +335,9 @@ export const PublishGame = () => {
             </label>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-              <input 
-                type="checkbox" 
-                checked={hasAiContent} 
+              <input
+                type="checkbox"
+                checked={hasAiContent}
                 onChange={(e) => setHasAiContent(e.target.checked)}
                 style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
               />
@@ -291,14 +348,113 @@ export const PublishGame = () => {
             </label>
           </div>
 
-          <button 
-            type="submit" 
-            className="btn-primary" 
-            disabled={publishing || !hasEnoughCoins}
+          {/* Admin Section: Publicar em nome de outro usuário */}
+          {isAdmin && (
+            <div style={{
+              padding: '20px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'rgba(139, 92, 246, 0.08)',
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <ShieldAlert size={20} color="var(--primary)" />
+                <div>
+                  <div style={{ fontWeight: '700', fontSize: '0.95rem' }}>Publicar em Nome de Outro Usuário</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    {adminTargetUser
+                      ? `✓ Publicando como: ${adminTargetUser.username} — gratuito, sem custo de moedas`
+                      : 'Deixe em branco para publicar como você mesmo normalmente.'}
+                  </div>
+                </div>
+                {adminTargetUser && (
+                  <button
+                    type="button"
+                    onClick={() => { setAdminTargetUser(null); setAdminTargetResults([]); setAdminSearched(false); setAdminTargetQuery(''); }}
+                    style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                  >
+                    <X size={14} /> Remover seleção
+                  </button>
+                )}
+              </div>
+
+              {!adminTargetUser && (
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input
+                    type="text"
+                    placeholder="Buscar usuário por nome ou ID..."
+                    value={adminTargetQuery}
+                    onChange={(e) => setAdminTargetQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdminSearchUsers(); } }}
+                    className="input-field"
+                    style={{ flex: 1 }}
+                  />
+                  <button type="button" className="btn-secondary" disabled={adminSearching} onClick={handleAdminSearchUsers}>
+                    <Search size={16} />
+                    {adminSearching ? 'Buscando...' : 'Buscar'}
+                  </button>
+                </div>
+              )}
+
+              {!adminTargetUser && adminSearched && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {adminTargetResults.length === 0 && (
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>Nenhum usuário encontrado.</p>
+                  )}
+                  {adminTargetResults.map(u => (
+                    <div key={u.userId} style={{
+                      display: 'flex', alignItems: 'center', gap: '12px',
+                      padding: '10px 14px',
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid var(--border-glass)',
+                      borderRadius: 'var(--radius-sm)',
+                    }}>
+                      <img src={u.avatarUrl} alt="" style={{ width: '36px', height: '36px', borderRadius: '50%' }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: '600', fontSize: '0.9rem' }}>{u.username}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {u.userId}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAdminTargetUser(u)}
+                        className="btn-secondary"
+                        style={{ fontSize: '0.82rem', padding: '6px 14px' }}
+                      >
+                        <UserCheck size={14} /> Selecionar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {adminTargetUser && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.4)', borderRadius: 'var(--radius-sm)' }}>
+                  <img src={adminTargetUser.avatarUrl} alt="" style={{ width: '36px', height: '36px', borderRadius: '50%' }} />
+                  <div>
+                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{adminTargetUser.username}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Usuário selecionado — publicação gratuita</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={publishing || (!isAdmin && !hasEnoughCoins) || (isAdmin && !adminTargetUser && !hasEnoughCoins)}
             style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: '1rem', marginTop: '10px' }}
           >
             <PlusCircle size={20} />
-            <span>{publishing ? 'Publicando no Fórum Discord...' : `Publicar Jogo (${cost} Moedas)`}</span>
+            <span>
+              {publishing
+                ? 'Publicando no Fórum Discord...'
+                : isAdmin && adminTargetUser
+                  ? `Publicar como ${adminTargetUser.username}`
+                  : `Publicar Jogo (${cost} Moedas)`}
+            </span>
           </button>
         </form>
       </div>

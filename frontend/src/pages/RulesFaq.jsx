@@ -20,7 +20,7 @@ export const RulesFaq = () => {
           <h2 style={{ fontSize: '1.4rem' }}>Fórmula Dinâmica do Custo de Publicação</h2>
         </div>
         <p style={{ color: 'var(--text-main)', marginBottom: '16px', lineHeight: '1.6' }}>
-          O custo \(C\) em Moedas de Teste para publicar um novo jogo no servidor é ajustado dinamicamente com base na quantidade \(N\) de jogos ativos cadastrados no sistema:
+          O custo C em Moedas de Teste para publicar um novo jogo no servidor é ajustado dinamicamente com base na quantidade N de jogos ativos cadastrados no sistema:
         </p>
         <div style={{
           background: 'rgba(15, 20, 35, 0.9)',
@@ -31,14 +31,15 @@ export const RulesFaq = () => {
           fontSize: '1.4rem',
           fontWeight: '700',
           color: 'var(--primary)',
-          marginBottom: '16px'
+          marginBottom: '16px',
+          fontFamily: 'monospace'
         }}>
-          \(C = \min(N, 10)\)
+          C = min(5, &lfloor;N / 2&rfloor;)
         </div>
         <ul style={{ color: 'var(--text-muted)', lineHeight: '1.8', paddingLeft: '20px' }}>
-          <li><strong>Se N = 0:</strong> Custo é 0 moedas (Servidor vazio, incentivo à primeira publicação).</li>
-          <li><strong>Se N = 3:</strong> Custo é 3 moedas (Exige que o dev avalie 3 jogos de outros membros).</li>
-          <li><strong>Se N &ge; 10:</strong> Custo é fixado no teto máximo de 10 moedas.</li>
+          <li><strong>Se N = 0 ou 1:</strong> Custo é 0 moedas (Incentivo inicial, &lfloor;N/2&rfloor; = 0).</li>
+          <li><strong>Se N = 4 ou 5:</strong> Custo é 2 moedas (Exige que o dev avalie 2 jogos de outros membros).</li>
+          <li><strong>Se N &ge; 10:</strong> Custo é fixado no teto máximo de 5 moedas.</li>
         </ul>
       </div>
 
@@ -74,7 +75,7 @@ export const RulesFaq = () => {
           <h2 style={{ fontSize: '1.3rem' }}>Aviso Legal (Disclaimer sobre Links Externos)</h2>
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.6' }}>
-          A plataforma Indie Feedback redireciona para links externos mantidos por terceiros (Itch.io, Steam, Google Drive, Mega). Recomendamos sempre verificar a reputação dos arquivos antes de executar binários (.exe) em sua máquina. Qualquer suspeita de malware deve ser notificada imediatamente através da opção <strong>Denunciar Jogo</strong>.
+          A plataforma Indie UpStart redireciona para links externos mantidos por terceiros (Itch.io, Steam, Google Drive, Mega). Recomendamos sempre verificar a reputação dos arquivos antes de executar binários (.exe) em sua máquina. Qualquer suspeita de malware deve ser notificada imediatamente através da opção <strong>Denunciar Jogo</strong>.
         </p>
       </div>
     </div>

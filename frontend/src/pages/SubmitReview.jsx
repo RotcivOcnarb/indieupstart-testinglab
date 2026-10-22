@@ -34,12 +34,15 @@ export const SubmitReview = () => {
       setLoading(true);
       const res = await api.getGames(user.userId);
       if (res && res.games) {
+        // Inclui todos os jogos na lista (para permitir selecionar via URL mesmo os próprios)
         setGames(res.games);
         if (paramThreadId) {
           const match = res.games.find(g => g.threadId === paramThreadId);
           if (match) setSelectedGame(match);
-        } else if (res.games.length > 0) {
-          setSelectedGame(res.games[0]);
+        } else {
+          // Na listagem lateral, pré-seleciona o primeiro jogo que NÃO é do usuário logado
+          const firstOther = res.games.find(g => g.authorId !== user.userId);
+          if (firstOther) setSelectedGame(firstOther);
         }
       }
       setLoading(false);
@@ -133,7 +136,7 @@ export const SubmitReview = () => {
         {/* Game List Sidebar */}
         <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '780px', overflowY: 'auto' }}>
           <h3 style={{ fontSize: '1.05rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
-            Jogos Disponíveis ({games.length})
+            Jogos Disponíveis ({games.filter(g => g.authorId !== user?.userId).length})
           </h3>
 
           {loading ? (
@@ -141,7 +144,9 @@ export const SubmitReview = () => {
           ) : games.length === 0 ? (
             <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px' }}>Nenhum jogo no momento.</div>
           ) : (
-            games.map(game => (
+            games
+              .filter(g => g.authorId !== user?.userId) // Oculta jogos próprios da listagem
+              .map(game => (
               <div 
                 key={game.threadId}
                 onClick={() => { setSelectedGame(game); setError(''); setSuccess(''); }}
@@ -232,7 +237,13 @@ export const SubmitReview = () => {
             </div>
 
             {/* Review Form or Already Reviewed Notification */}
-            {selectedGame.hasReviewed ? (
+            {selectedGame.authorId === user?.userId ? (
+              <div style={{ padding: '24px', background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.5)', borderRadius: 'var(--radius-sm)', color: '#fde047', textAlign: 'center' }}>
+                <ShieldAlert size={32} style={{ marginBottom: '8px' }} />
+                <h3>Este é o seu próprio jogo!</h3>
+                <p style={{ fontSize: '0.9rem', marginTop: '4px', color: 'rgba(253, 224, 71, 0.8)' }}>Você não pode avaliar seus próprios projetos. Selecione outro jogo na lista ao lado.</p>
+              </div>
+            ) : selectedGame.hasReviewed ? (
               <div style={{ padding: '24px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid var(--success)', borderRadius: 'var(--radius-sm)', color: '#6ee7b7', textAlign: 'center' }}>
                 <CheckCircle size={32} style={{ marginBottom: '8px' }} />
                 <h3>Você já avaliou este jogo!</h3>

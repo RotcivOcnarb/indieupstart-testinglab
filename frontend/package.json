@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:dev": "vite build --mode development && aws s3 sync dist/ s3://indie-feedback-frontend-dev-145908329026-sa-east-1 --delete --profile rots-pessoal",
+    "deploy:prod": "vite build --mode production && aws s3 sync dist/ s3://indie-feedback-frontend-prod-145908329026-sa-east-1 --delete --profile rots-pessoal"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",

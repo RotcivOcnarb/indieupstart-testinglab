@@ -1,10 +1,12 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 
+import { getTableName } from '../utils/env.mjs';
+
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
-const USERS_TABLE = process.env.USERS_TABLE || 'IndieFeedback-Users';
+const USERS_TABLE = getTableName(process.env.USERS_TABLE, 'IndieFeedback-Users');
 
 export const handler = async (event) => {
   try {
@@ -31,13 +33,24 @@ export const handler = async (event) => {
       };
     }
 
+    const userItem = response.Item;
+    
+    // Filtra dados para enviar apenas informações públicas
+    const publicData = {
+      userId: userItem.userId,
+      username: userItem.username,
+      avatarUrl: userItem.avatarUrl,
+      createdAt: userItem.createdAt,
+      role: userItem.role || 'user',
+    };
+
     return {
       statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
       },
-      body: JSON.stringify(response.Item),
+      body: JSON.stringify(publicData),
     };
   } catch (error) {
     console.error('Error in GetUserProfileHandler:', error);

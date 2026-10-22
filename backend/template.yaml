@@ -13,6 +13,10 @@ Parameters:
       - prod
     Description: Environment stage (dev or prod)
 
+  SiteBaseUrl:
+    Type: String
+    Description: URL base do front-end recebida via samconfig.toml
+
 Globals:
   Function:
     Timeout: 10
@@ -26,13 +30,16 @@ Globals:
         USERS_TABLE: !Ref UsersTable
         GAMES_TABLE: !Ref GamesTable
         REVIEWS_TABLE: !Ref ReviewsTable
+        WEEKLY_GAME_TABLE: !Ref WeeklyGameTable
         BANNERS_BUCKET: !Ref BannersBucket
-        DISCORD_CLIENT_ID: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:CLIENT_ID}}"
-        DISCORD_CLIENT_SECRET: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:CLIENT_SECRET}}"
-        DISCORD_BOT_TOKEN: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:BOT_TOKEN}}"
-        DISCORD_GUILD_ID: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:GUILD_ID}}"
-        DISCORD_FORUM_CHANNEL_ID: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:FORUM_CHANNEL_ID}}"
-        DISCORD_MOD_WEBHOOK_URL: "{{resolve:secretsmanager:IndieFeedbackDiscord:SecretString:MOD_WEBHOOK_URL}}"
+        DISCORD_CLIENT_ID: !Sub "{{resolve:secretsmanager:IndieFeedbackDiscord-${Stage}:SecretString:CLIENT_ID}}"
+        DISCORD_CLIENT_SECRET: !Sub "{{resolve:secretsmanager:IndieFeedbackDiscord-${Stage}:SecretString:CLIENT_SECRET}}"
+        DISCORD_BOT_TOKEN: !Sub "{{resolve:secretsmanager:IndieFeedbackDiscord-${Stage}:SecretString:BOT_TOKEN}}"
+        DISCORD_GUILD_ID: !Sub "{{resolve:secretsmanager:IndieFeedbackDiscord-${Stage}:SecretString:GUILD_ID}}"
+        DISCORD_FORUM_CHANNEL_ID: !Sub "{{resolve:secretsmanager:IndieFeedbackDiscord-${Stage}:SecretString:FORUM_CHANNEL_ID}}"
+        DISCORD_MOD_WEBHOOK_URL: !Sub "{{resolve:secretsmanager:IndieFeedbackDiscord-${Stage}:SecretString:MOD_WEBHOOK_URL}}"
+        DISCORD_ANNOUNCEMENTS_CHANNEL_ID: !Sub "{{resolve:secretsmanager:IndieFeedbackDiscord-${Stage}:SecretString:ANNOUNCEMENTS_CHANNEL_ID}}"
+        SITE_BASE_URL: !Ref SiteBaseUrl
 
 Resources:
   # =========================================================================
@@ -77,6 +84,18 @@ Resources:
           KeyType: HASH
         - AttributeName: userId
           KeyType: RANGE
+
+  WeeklyGameTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "IndieFeedback-WeeklyGame-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: weekId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: weekId
+          KeyType: HASH
 
   # =========================================================================
   # S3 Buckets
@@ -144,6 +163,13 @@ Resources:
       DistributionConfig:
         Enabled: true
         DefaultRootObject: index.html
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
         Origins:
           - Id: S3FrontendOrigin
             DomainName: !GetAtt FrontendBucket.RegionalDomainName
@@ -167,7 +193,7 @@ Resources:
   HttpApiGateway:
     Type: AWS::Serverless::HttpApi
     Properties:
-      Name: IndieFeedbackApi
+      Name: !Sub "IndieFeedbackApi-${Stage}"
       CorsConfiguration:
         AllowOrigins:
           - "*"
@@ -175,9 +201,11 @@ Resources:
           - Content-Type
           - Authorization
           - X-Amz-Date
+          - x-user-id
         AllowMethods:
           - GET
           - POST
+          - DELETE
           - OPTIONS
 
   # =========================================================================
@@ -186,8 +214,8 @@ Resources:
   AuthDiscordFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/auth/
-      Handler: index.handler
+      CodeUri: src/
+      Handler: auth/index.handler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable
@@ -202,8 +230,8 @@ Resources:
   GetUserProfileFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/user/
-      Handler: index.handler
+      CodeUri: src/
+      Handler: user/index.handler
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref UsersTable
@@ -218,8 +246,8 @@ Resources:
   GetGamesFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/games/
-      Handler: list.handler
+      CodeUri: src/
+      Handler: games/list.handler
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref GamesTable
@@ -236,8 +264,8 @@ Resources:
   UploadUrlFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/games/
-      Handler: upload-url.handler
+      CodeUri: src/
+      Handler: games/upload-url.handler
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref BannersBucket
@@ -252,8 +280,8 @@ Resources:
   CreateGameFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/games/
-      Handler: create.handler
+      CodeUri: src/
+      Handler: games/create.handler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable
@@ -270,8 +298,8 @@ Resources:
   CreateReviewFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/reviews/
-      Handler: create.handler
+      CodeUri: src/
+      Handler: reviews/create.handler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ReviewsTable
@@ -279,6 +307,8 @@ Resources:
             TableName: !Ref UsersTable
         - DynamoDBReadPolicy:
             TableName: !Ref GamesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref WeeklyGameTable
       Events:
         ApiEvent:
           Type: HttpApi
@@ -287,11 +317,27 @@ Resources:
             Method: POST
             ApiId: !Ref HttpApiGateway
 
+  GetReviewHistoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: reviews/history.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ReviewsTable
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /reviews/history
+            Method: GET
+            ApiId: !Ref HttpApiGateway
+
   ReportReviewFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/reports/
-      Handler: review.handler
+      CodeUri: src/
+      Handler: reports/review.handler
       Events:
         ApiEvent:
           Type: HttpApi
@@ -303,14 +349,128 @@ Resources:
   ReportGameFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/reports/
-      Handler: game.handler
+      CodeUri: src/
+      Handler: reports/game.handler
       Events:
         ApiEvent:
           Type: HttpApi
           Properties:
             Path: /reports/game
             Method: POST
+            ApiId: !Ref HttpApiGateway
+
+  AdminUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: admin/users.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        GetUsers:
+          Type: HttpApi
+          Properties:
+            Path: /admin/users
+            Method: GET
+            ApiId: !Ref HttpApiGateway
+        UpdateCoins:
+          Type: HttpApi
+          Properties:
+            Path: /admin/users/{id}/coins
+            Method: POST
+            ApiId: !Ref HttpApiGateway
+
+  AdminGamesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: admin/games.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GamesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ReviewsTable
+      Events:
+        CreateGame:
+          Type: HttpApi
+          Properties:
+            Path: /admin/games
+            Method: POST
+            ApiId: !Ref HttpApiGateway
+        DeleteGame:
+          Type: HttpApi
+          Properties:
+            Path: /admin/games/{id}
+            Method: DELETE
+            ApiId: !Ref HttpApiGateway
+
+  AdminAnnouncementsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: admin/announcements.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        PostAnnouncement:
+          Type: HttpApi
+          Properties:
+            Path: /admin/announcements
+            Method: POST
+            ApiId: !Ref HttpApiGateway
+
+  # =========================================================================
+  # Weekly Game of the Week - Selector Lambda (EventBridge Schedule)
+  # Runs every Monday at 17:00 UTC (14:00 BRT)
+  # =========================================================================
+  WeeklyGameSelectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: weeklyGame/selector.handler
+      Timeout: 30
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref GamesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ReviewsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WeeklyGameTable
+      Events:
+        WeeklySchedule:
+          Type: ScheduleV2
+          Properties:
+            Name: !Sub "IndieFeedback-WeeklyGameSchedule-${Stage}"
+            Description: "Selects the Game of the Week every Monday at 14h BRT (17h UTC)"
+            ScheduleExpression: "cron(0 17 ? * MON *)"
+            ScheduleExpressionTimezone: "UTC"
+            State: ENABLED
+            RetryPolicy:
+              MaximumRetryAttempts: 2
+
+  # =========================================================================
+  # Weekly Game - GET Endpoint
+  # =========================================================================
+  GetWeeklyGameFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: weeklyGame/get.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref WeeklyGameTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ReviewsTable
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /weekly-game
+            Method: GET
             ApiId: !Ref HttpApiGateway
 
 Outputs:
@@ -323,3 +483,6 @@ Outputs:
   BannersBucketName:
     Description: S3 Bucket for Uploading Banners
     Value: !Ref BannersBucket
+  WeeklyGameTableName:
+    Description: DynamoDB Table for Weekly Game of the Week history
+    Value: !Ref WeeklyGameTable

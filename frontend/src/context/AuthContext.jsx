@@ -6,18 +6,14 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('indie_user');
-    return saved ? JSON.parse(saved) : {
-      userId: 'discord_indie_dev_1001',
-      username: 'DevMember#1001',
-      avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png',
-      balance: 3, // Initial balance
-      createdAt: Date.now(),
-    };
+    return saved ? JSON.parse(saved) : null;
   });
 
   useEffect(() => {
     if (user) {
       localStorage.setItem('indie_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('indie_user');
     }
   }, [user]);
 
@@ -29,8 +25,8 @@ export const AuthProvider = ({ children }) => {
     });
   };
 
-  const loginWithDiscord = async (code) => {
-    const data = await api.loginDiscord(code);
+  const loginWithDiscord = async (code, redirectUri, referalId) => {
+    const data = await api.loginDiscord(code, redirectUri, referalId);
     if (data && data.user) {
       setUser(data.user);
     }

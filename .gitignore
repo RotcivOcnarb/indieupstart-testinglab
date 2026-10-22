@@ -1,0 +1,14 @@
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+frontend/.env
+backend/.env
+
+# Ignore everything .env except .env.example
+!.env.example
+
+# Node modules
+node_modules/
+dist/
+.aws-sam/

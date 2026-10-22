@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { History, Star, Gamepad2, Coins } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
 
 export const ReviewHistory = () => {
   const { user } = useAuth();
@@ -8,9 +9,15 @@ export const ReviewHistory = () => {
 
   useEffect(() => {
     if (!user) return;
-    const localReviews = JSON.parse(localStorage.getItem('indie_reviews') || '[]');
-    const myReviews = localReviews.filter(r => r.userId === user.userId);
-    setHistory(myReviews.reverse());
+    const fetchHistory = async () => {
+      try {
+        const data = await api.getReviewHistory(user.userId);
+        setHistory(data.reviews || []);
+      } catch (err) {
+        console.error('Erro ao carregar histórico de avaliações:', err);
+      }
+    };
+    fetchHistory();
   }, [user]);
 
   return (
